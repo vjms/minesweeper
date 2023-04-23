@@ -1,0 +1,27 @@
+button.button-safe {
+    color: white;
+    background-color: white;
+    background-image: none;
+
+}
+
+button.button-mine {
+    color: white;
+    background-color: white;
+    background-image: none;
+
+}
+
+button.button-safe:disabled {
+    color: black;
+    background-color: lightgray;
+    background-image: none;
+    font-size: x-large;
+    font-weight: bolder;
+}
+
+button.button-mine:disabled {
+    color: darkred;
+    background-color: darkred;
+    background-image: none;
+}
