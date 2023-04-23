@@ -7,6 +7,8 @@ import Control.Monad
 import Data.Array.IO
 import Data.GI.Base
 import Data.GI.Base.ShortPrelude (SignalHandlerId)
+import qualified Data.GI.Base.Signals as Gtk
+import Data.Maybe (fromJust)
 import Data.Text (Text, pack)
 import GI.Gtk (styleContext)
 import qualified GI.Gtk as Gtk
@@ -33,7 +35,7 @@ startGame window = do
   let columns = 10
   let rows = 10
   let mines = 10
-  mf <- generateMinefield columns rows mines
+  mf <- generateMinefield rows columns mines
   grid <- createGrid window mf rows columns
   #add window grid
   #showAll window
@@ -62,7 +64,7 @@ setMine mf index = do
 
 -- Row and column position by index and column count.
 toPosition :: Int -> Int -> (Int, Int)
-toPosition index columnC = (div index columnC, mod index columnC)
+toPosition index columnC = (index `div` columnC, index `mod` columnC)
 
 -- Index in an array based on the position and column count.
 toIndex :: (Int, Int) -> Int -> Int
@@ -91,13 +93,13 @@ genMines mf size count = do
   addMine mf size (-1)
   genMines mf size (count - 1)
 
+withinBounds :: Int -> Int -> (Int, Int) -> Bool
+withinBounds rowC columnC (row, column) = row >= 0 && row < rowC && column >= 0 && column < columnC
+
 -- Increase the value of a tile if it is not a mine. Used in conjugtion with the generate neighbours function.
 increaseNeighbouringMineCount :: IOArray Int Int -> Int -> Int -> (Int, Int) -> IO ()
 increaseNeighbouringMineCount mf rowC columnC position
-  | row < 0 = return ()
-  | row >= rowC = return ()
-  | column < 0 = return ()
-  | column >= columnC = return ()
+  | not (withinBounds rowC columnC position) = return ()
   | otherwise = do
       value <- readArray mf index
       unless (isMine value) $ writeArray mf index (value + 1)
@@ -128,11 +130,25 @@ attachOnClicked :: Gtk.Button -> IO ()
 attachOnClicked button = do
   return ()
 
+simulateClick :: Maybe Gtk.Widget -> IO ()
+simulateClick maybeWidget = case maybeWidget of
+  Just widget -> do
+    button <- castTo Gtk.Button widget
+    forM_ button Gtk.buttonClicked
+  Nothing -> return ()
+
+simulateClickAt :: Gtk.Grid -> Int -> Int -> (Int, Int) -> IO ()
+simulateClickAt grid rowC columnC position
+  | not (withinBounds rowC columnC position) = return ()
+  | otherwise = do
+      Gtk.gridGetChildAt grid (fromIntegral column) (fromIntegral row) >>= simulateClick
+  where
+    (row, column) = position
+
 createGrid :: Gtk.Window -> IOArray Int Int -> Int -> Int -> IO Gtk.Grid
 createGrid window mf rowC columnC = do
   grid <- new Gtk.Grid []
 
-  -- 1. Generate buttons
   sequence_ $ do
     i <- [0 .. (rowC * columnC) - 1]
     return $ do
@@ -142,7 +158,18 @@ createGrid window mf rowC columnC = do
       Gtk.gridAttach grid button (fromIntegral col) (fromIntegral row) 1 1
 
       on button #clicked $ do
+        isSensitive <- Gtk.widgetGetSensitive button
         Gtk.setWidgetSensitive button False
+
+        when ((value == 0) && isSensitive) $ do
+          simulateClickAt grid rowC columnC (row, col - 1)
+          simulateClickAt grid rowC columnC (row, col + 1)
+          simulateClickAt grid rowC columnC (row + 1, col)
+          simulateClickAt grid rowC columnC (row + 1, col - 1)
+          simulateClickAt grid rowC columnC (row + 1, col + 1)
+          simulateClickAt grid rowC columnC (row - 1, col)
+          simulateClickAt grid rowC columnC (row - 1, col - 1)
+          simulateClickAt grid rowC columnC (row - 1, col + 1)
 
         when (isMine value) $ do
           dialog <- Gtk.dialogNew
@@ -153,15 +180,6 @@ createGrid window mf rowC columnC = do
           when (response == 2) $ do
             startGame window
           #close dialog
-
-  -- -- 2. Attach an event to each button to tell the neighbouring buttons that it was clicked
-  -- sequence_ $ do
-  --   i <- [0 .. (rowC * columnC) - 1]
-  --   return $ do
-  --     buttonMaybe <- Gtk.gridGetChildAt grid 0 0
-  --     case buttonMaybe of
-  --       Just child -> maybe (return ()) attachOnClicked (castTo Gtk.Button child)
-  --       Nothing -> return ()
 
   return grid
 
