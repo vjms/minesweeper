@@ -46,6 +46,8 @@ generateMinefield rows columns mines = do
   mf <- newArray (0, size - 1) 0
   genMines mf size mines
   genNeighbours mf rows columns
+
+  -- Output to console for debug and validation purposes.
   sequence_ $ do
     i <- [0 .. size - 1]
     return $ do
@@ -125,10 +127,6 @@ genNeighbours mf rowC columnC = do
         increaseNeighbouringMineCount mf rowC columnC (row + 1, col) -- down
         increaseNeighbouringMineCount mf rowC columnC (row + 1, col - 1) -- down-left
         increaseNeighbouringMineCount mf rowC columnC (row + 1, col + 1) -- down-right
-
-attachOnClicked :: Gtk.Button -> IO ()
-attachOnClicked button = do
-  return ()
 
 simulateClick :: Maybe Gtk.Widget -> IO ()
 simulateClick maybeWidget = case maybeWidget of
